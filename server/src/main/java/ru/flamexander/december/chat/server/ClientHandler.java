@@ -28,16 +28,19 @@ public class ClientHandler {
         new Thread(() -> {
             try {
                 while (true) {
-                    String message = in.readUTF();
-                    if (message.startsWith("/")) {
-                        if (message.equals("/exit")) {
+                    String rawMessage = in.readUTF();
+                    if (rawMessage.startsWith("/")) {
+                        if (rawMessage.equals("/exit")) {
                             break;
+                        } else if (rawMessage.startsWith("/w ")) {
+                            String[] elements = rawMessage.split(" ", 3);
+                            String recipient = elements[1];
+                            String message = elements[2];
+                            server.sendPrivateMessage(this, recipient, message);
                         }
-                        if (message.startsWith("/w ")) {
-                            // TODO homework
-                        }
+                    } else {
+                        server.broadcastMessage(username + ": " + rawMessage);
                     }
-                    server.broadcastMessage(username + ": " + message);
                 }
             } catch (IOException e) {
                 e.printStackTrace();
