@@ -4,12 +4,13 @@ package ru.flamexander.december.chat.server;
  * @author zhechtec
  */
 public class User {
+	private Long id;
 	protected String login;
-	protected String password;
+	private String password;
 	private String username;
-	protected Role role;
+	protected String role;
 
-	public User(String login, String password, String username, Role role) {
+	public User(String login, String password, String username, String role) {
 		this.login = login;
 		this.password = password;
 		this.username = username;
@@ -20,7 +21,23 @@ public class User {
 		this.login = login;
 		this.password = password;
 		this.username = username;
-		this.role = Role.USER;
+		this.role = Role.USER.getTitle();
+	}
+
+	public Long getId() {
+		return id;
+	}
+
+	public String getLogin() {
+		return login;
+	}
+
+	public void setLogin(String login) {
+		this.login = login;
+	}
+
+	public String getPassword() {
+		return password;
 	}
 
 	public String getUsername() {
@@ -32,7 +49,12 @@ public class User {
 	}
 
 	public boolean isAdmin(){
-		return role.equals(Role.ADMIN);
+		return role.equals(Role.ADMIN.title);
+	}
+
+	@Override
+	public String toString() {
+		return String.format("Студент [id: %d, логин: %s, имя: %s, роль: %s]", id, login, username, role);
 	}
 
 	/**
