@@ -2,9 +2,7 @@ package ru.flamexander.december.chat.server;
 
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.HashSet;
 import java.util.List;
-import java.util.Set;
 
 public class InMemoryUserService implements UserService {
 
@@ -12,17 +10,17 @@ public class InMemoryUserService implements UserService {
 
     public InMemoryUserService() {
         this.users = new ArrayList<>(Arrays.asList(
-                new User("login1", "pass1", "user1", User.Role.USER),
-                new User("login2", "pass2", "user2", User.Role.USER),
-                new User("login3", "pass3", "user3", User.Role.USER),
-                new User("admin", "admin", "admin", User.Role.ADMIN)
+                new User("login1", "pass1", "user1", User.Role.USER.getTitle()),
+                new User("login2", "pass2", "user2", User.Role.USER.getTitle()),
+                new User("login3", "pass3", "user3", User.Role.USER.getTitle()),
+                new User("admin", "admin", "admin", User.Role.ADMIN.getTitle())
         ));
     }
 
     @Override
     public User getUserByLoginAndPassword(String login, String password) {
         for (User u : users) {
-            if (u.login.equals(login) && u.password.equals(password)) {
+            if (u.login.equals(login) && u.getPassword().equals(password)) {
                 return u;
             }
         }

@@ -4,6 +4,7 @@ import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
 import java.net.Socket;
+import java.sql.SQLException;
 
 public class ClientHandler {
     private Server server;
@@ -25,7 +26,7 @@ public class ClientHandler {
             try {
                 authentication();
                 listenUserChatMessages();
-            } catch (IOException e) {
+            } catch (Exception e) {
                 e.printStackTrace();
             } finally {
                 disconnect();
@@ -87,7 +88,7 @@ public class ClientHandler {
         }
     }
 
-    private boolean tryToAuthenticate(String message) {
+    private boolean tryToAuthenticate(String message) throws SQLException {
         String[] elements = message.split(" "); // /auth login1 pass1
         if (elements.length != 3) {
             sendMessage("СЕРВЕР: некорректная команда аутентификации");
@@ -111,7 +112,7 @@ public class ClientHandler {
         return true;
     }
 
-    private boolean register(String message) {
+    private boolean register(String message) throws SQLException {
         String[] elements = message.split(" "); // /auth login1 pass1 user1
         if (elements.length != 4) {
             sendMessage("СЕРВЕР: некорректная команда аутентификации");
@@ -135,7 +136,7 @@ public class ClientHandler {
         return true;
     }
 
-    private void authentication() throws IOException {
+    private void authentication() throws IOException, SQLException {
         while (true) {
             String message = in.readUTF();
             boolean isSucceed = false;
