@@ -1,8 +1,12 @@
 package ru.flamexander.december.chat.server;
 
+import ru.flamexander.december.chat.server.jdbc.JdbcService;
+import ru.flamexander.december.chat.server.jdbc.JdbcUserService;
+
 import java.io.IOException;
 import java.net.ServerSocket;
 import java.net.Socket;
+import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -23,7 +27,9 @@ public class Server {
     public void start() {
         try (ServerSocket serverSocket = new ServerSocket(port)) {
             System.out.printf("Сервер запущен на порту %d. Ожидание подключения клиентов\n", port);
-            userService = new InMemoryUserService();
+            JdbcService.connect();
+            System.out.println("Сервер подключен к локальной БД");
+            userService = new JdbcUserService();
             System.out.println("Запущен сервис для работы с пользователями");
             while (true) {
                 Socket socket = serverSocket.accept();
@@ -33,8 +39,10 @@ public class Server {
                     System.out.println("Не удалось подключить клиента");
                 }
             }
-        } catch (IOException e) {
+        } catch (Exception e) {
             e.printStackTrace();
+        } finally {
+            JdbcService.disconnect();
         }
     }
 
