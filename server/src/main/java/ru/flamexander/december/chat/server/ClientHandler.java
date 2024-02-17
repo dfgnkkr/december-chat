@@ -10,10 +10,12 @@ public class ClientHandler {
     private Socket socket;
     private DataOutputStream out;
     private DataInputStream in;
-    private User user;
+    private String username;
+
+    private static int clientsCount = 0;
 
     public String getUsername() {
-        return user.getUsername();
+        return username;
     }
 
     public ClientHandler(Server server, Socket socket) throws IOException {
@@ -21,37 +23,31 @@ public class ClientHandler {
         this.socket = socket;
         this.in = new DataInputStream(socket.getInputStream());
         this.out = new DataOutputStream(socket.getOutputStream());
+        clientsCount++;
+        this.username = "user" + clientsCount;
         new Thread(() -> {
             try {
-                authentication();
-                listenUserChatMessages();
+                while (true) {
+                    String rawMessage = in.readUTF();
+                    if (rawMessage.startsWith("/")) {
+                        if (rawMessage.equals("/exit")) {
+                            break;
+                        } else if (rawMessage.startsWith("/w ")) {
+                            String[] elements = rawMessage.split(" ", 3);
+                            String recipient = elements[1];
+                            String message = elements[2];
+                            server.sendPrivateMessage(this, recipient, message);
+                        }
+                    } else {
+                        server.broadcastMessage(username + ": " + rawMessage);
+                    }
+                }
             } catch (IOException e) {
                 e.printStackTrace();
             } finally {
                 disconnect();
             }
         }).start();
-    }
-
-    private void listenUserChatMessages() throws IOException {
-        while (true) {
-            String message = in.readUTF();
-            if (message.startsWith("/")) {
-                if (message.equals("/exit")) {
-                    break;
-                }
-                if (message.startsWith("/w ")) {
-                    // TODO homework chat part 1
-                }
-                if (message.startsWith("/kick") && user.isAdmin()){
-                    String[] elements = message.split(" ", 2);
-                    String kikedUserName = elements[1];
-                    server.kickUser(kikedUserName);
-                }
-            } else {
-                server.broadcastMessage(getUsername() + ": " + message);
-            }
-        }
     }
 
     public void sendMessage(String message) {
@@ -84,71 +80,6 @@ public class ClientHandler {
             }
         } catch (IOException e) {
             e.printStackTrace();
-        }
-    }
-
-    private boolean tryToAuthenticate(String message) {
-        String[] elements = message.split(" "); // /auth login1 pass1
-        if (elements.length != 3) {
-            sendMessage("СЕРВЕР: некорректная команда аутентификации");
-            return false;
-        }
-        String login = elements[1];
-        String password = elements[2];
-        User userFromUserService = server.getUserService().getUserByLoginAndPassword(login, password);
-        if (userFromUserService == null) {
-            sendMessage("СЕРВЕР: пользователя с указанным логин/паролем не существует");
-            return false;
-        }
-        if (server.isUserBusy(userFromUserService.getUsername())) {
-            sendMessage("СЕРВЕР: учетная запись уже занята");
-            return false;
-        }
-        user = userFromUserService;
-        server.subscribe(this);
-        sendMessage("/authok " + getUsername());
-        sendMessage("СЕРВЕР: " + getUsername() + ", добро пожаловать в чат!");
-        return true;
-    }
-
-    private boolean register(String message) {
-        String[] elements = message.split(" "); // /auth login1 pass1 user1
-        if (elements.length != 4) {
-            sendMessage("СЕРВЕР: некорректная команда аутентификации");
-            return false;
-        }
-        String login = elements[1];
-        String password = elements[2];
-        String registrationUsername = elements[3];
-        if (server.getUserService().isLoginAlreadyExist(login)) {
-            sendMessage("СЕРВЕР: указанный login уже занят");
-            return false;
-        }
-        if (server.getUserService().isUsernameAlreadyExist(registrationUsername)) {
-            sendMessage("СЕРВЕР: указанное имя пользователя уже занято");
-            return false;
-        }
-        user = server.getUserService().createNewUser(login, password, registrationUsername);
-        sendMessage("/authok " + getUsername());
-        sendMessage("СЕРВЕР: " + getUsername() + ", вы успешно прошли регистрацию, добро пожаловать в чат!");
-        server.subscribe(this);
-        return true;
-    }
-
-    private void authentication() throws IOException {
-        while (true) {
-            String message = in.readUTF();
-            boolean isSucceed = false;
-            if (message.startsWith("/auth ")) {
-                isSucceed = tryToAuthenticate(message);
-            } else if (message.startsWith("/register ")) {
-                isSucceed = register(message);
-            } else {
-                sendMessage("СЕРВЕР: требуется войти в учетную запись или зарегистрироваться");
-            }
-            if (isSucceed) {
-                break;
-            }
         }
     }
 }
