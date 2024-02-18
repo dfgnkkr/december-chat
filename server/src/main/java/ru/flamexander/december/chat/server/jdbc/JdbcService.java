@@ -29,11 +29,8 @@ public class JdbcService {
      * @throws SQLException <code>SQLException</code> пробрасывается просто наверх (допустимо в учебном примере)
      */
     public static void connect() throws SQLException {
-        // Class.forName("org.sqlite.JDBC");
         connection = DriverManager.getConnection("jdbc:sqlite:db2.db");
         statement = connection.createStatement();
-        // connection.setTransactionIsolation(Connection.TRANSACTION_READ_COMMITTED);
-        // DatabaseMetaData dbMetaData = connection.getMetaData();
     }
 
     /**
@@ -49,13 +46,6 @@ public class JdbcService {
         } catch (SQLException e) {
             e.printStackTrace();
         }
-//        try {
-//            if (psInsert != null) {
-//                psInsert.close();
-//            }
-//        } catch (SQLException e) {
-//            e.printStackTrace();
-//        }
         try {
             if (connection != null) {
                 connection.close();
