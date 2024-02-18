@@ -5,7 +5,18 @@ import java.io.DataOutputStream;
 import java.io.IOException;
 import java.net.Socket;
 import java.sql.SQLException;
+import java.util.ArrayList;
+import java.util.List;
 
+/**
+ * сейчас там есть фича авторизации по данным из БД, регистрация новых УЗ с сохраниением в БД, условные права "юзер" и "админ".
+ *
+ * можно допилить:
+ * - фича "бан" (запрет читать/писать сообщения в течении Х секунд)
+ * - расширение ролей (добавление модераторов, наделение ролью "модератор" с помощью консольной команды)
+ * - фича "удаление учетной записи"
+ * - фича "шепнуть нескольким участникам"
+ */
 public class ClientHandler {
     private Server server;
     private Socket socket;
@@ -13,8 +24,12 @@ public class ClientHandler {
     private DataInputStream in;
     private User user;
 
-    public String getUsername() {
-        return user.getUsername();
+    public String getLogin() {
+        return user.getLogin();
+    }
+
+    public User getUser() {
+        return user;
     }
 
     public ClientHandler(Server server, Socket socket) throws IOException {
@@ -34,26 +49,91 @@ public class ClientHandler {
         }).start();
     }
 
-    private void listenUserChatMessages() throws IOException {
-        while (true) {
+    private void listenUserChatMessages() throws IOException, SQLException {
+        boolean isExitCommand = false;
+        while (!isExitCommand) {
             String rawMessage = in.readUTF();
             if (rawMessage.startsWith("/")) {
-                if (rawMessage.equals("/exit")) {
-                    break;
-                } else if (rawMessage.startsWith("/w ")) {
-                    String[] elements = rawMessage.split(" ", 3);
-                    String recipient = elements[1];
-                    String message = elements[2];
-                    server.sendPrivateMessage(this, recipient, message);
-                } else if (rawMessage.startsWith("/kick ") && user.isAdmin()){
-                    String[] elements = rawMessage.split(" ", 2);
-                    String kikedUserName = elements[1];
-                    server.kickUser(kikedUserName);
-                }
+                isExitCommand = recognizeCommandMessage(rawMessage);
+            } else if (user.isBanned()){
+                sendMessage("СЕРВЕР: вас забанили и вы не можете писать сообщения в чат до " + user.getUnbanTime().toString());
             } else {
-                server.broadcastMessage(getUsername() + ": " + rawMessage);
+                server.broadcastMessage(getLogin() + ": " + rawMessage);
             }
         }
+    }
+
+    private boolean recognizeCommandMessage(String rawCommandMessage) throws SQLException {
+        String[] elements = rawCommandMessage.split(" ");
+        String command = "";
+        List<String> users = new ArrayList<>();
+        List<String> attributes = new ArrayList<>();
+        StringBuilder message = new StringBuilder();
+        for (String element : elements) {
+            if (element.startsWith("/")) {
+                command = element;
+                continue;
+            }
+            if (element.startsWith("@")) {
+                users.add(element.replace("@", ""));
+                continue;
+            }
+            if (element.startsWith("-")) {
+                attributes.add(element);
+                continue;
+            }
+            message.append(element).append(" ");
+        }
+        switch (command){
+            case("/exit"):
+                return true;
+            case("/w"):
+                server.sendPrivateMessage(this, users, message.toString());
+                break;
+            case("/kick"):
+                if (user.isAdmin()) {
+                    server.kick(users);
+                } else {
+                    sendMessage("СЕРВЕР: у вас нет прав на выполнение команды " + command);
+                }
+                break;
+            case("/ban"):
+                if (user.isAdmin() || user.isModerator()) {
+                    server.ban(users, attributes.get(0));
+                } else {
+                    sendMessage("СЕРВЕР: у вас нет прав на выполнение команды " + command);
+                }
+                break;
+            case("/help"):
+                sendMessage("_______начало_справки_______");
+                sendMessage("/exit - отключиться");
+                sendMessage("/w @login text - написать приватное сообщение пользователю(лям)");
+                sendMessage("/ban @login -d=1 - забанить пользователя(лей) на указанное число дней/минут/часов");
+                sendMessage("/kick @login - отключить пользователя(лей) от сервера");
+                sendMessage("/help - вызов справки");
+                sendMessage("/role @login -add=moderator - выдать пользователю указанную роль");
+                sendMessage("/role @login -del - разжаловать пользователя(лей) до обычного юзера (низя разжаловать admin)");
+                sendMessage("/user @login -del - удалить УЗ пользователя (только если он не подключен)");
+                sendMessage("/online - список подключенных пользователей");
+                sendMessage("_______конец_справки_______");
+                break;
+            case("/role"):
+                if (user.isAdmin()) {
+                    if (!server.changeRole(users, attributes.get(0))) {
+                        sendMessage("СЕРВЕР: неизвестная команда " + command + " " + attributes.get(0));
+                    }
+                } else {
+                    sendMessage("СЕРВЕР: у вас нет прав на выполнение команды " + command);
+                }
+                break;
+            case("/user"):
+                server.removeUser(users.get(0), attributes.get(0));
+                break;
+            case("/online"):
+                server.onlineList(this);
+                break;
+        }
+        return false;
     }
 
     public void sendMessage(String message) {
@@ -102,37 +182,32 @@ public class ClientHandler {
             sendMessage("СЕРВЕР: пользователя с указанным логин/паролем не существует");
             return false;
         }
-        if (server.isUserBusy(userFromUserService.getUsername())) {
+        if (server.isUserBusy(userFromUserService.getLogin())) {
             sendMessage("СЕРВЕР: учетная запись уже занята");
             return false;
         }
         user = userFromUserService;
         server.subscribe(this);
-        sendMessage("/authok " + getUsername());
-        sendMessage("СЕРВЕР: " + getUsername() + ", добро пожаловать в чат!");
+        sendMessage("/authok " + getLogin());
+        sendMessage("СЕРВЕР: " + getLogin() + ", добро пожаловать в чат!");
         return true;
     }
 
     private boolean register(String message) throws SQLException {
         String[] elements = message.split(" "); // /auth login1 pass1 user1
-        if (elements.length != 4) {
+        if (elements.length != 3) {
             sendMessage("СЕРВЕР: некорректная команда аутентификации");
             return false;
         }
         String login = elements[1];
         String password = elements[2];
-        String registrationUsername = elements[3];
-        if (server.getUserService().isLoginAlreadyExist(login)) {
+        if (server.getUserService().isLoginExist(login)) {
             sendMessage("СЕРВЕР: указанный login уже занят");
             return false;
         }
-        if (server.getUserService().isUsernameAlreadyExist(registrationUsername)) {
-            sendMessage("СЕРВЕР: указанное имя пользователя уже занято");
-            return false;
-        }
-        user = server.getUserService().createNewUser(login, password, registrationUsername);
-        sendMessage("/authok " + getUsername());
-        sendMessage("СЕРВЕР: " + getUsername() + ", вы успешно прошли регистрацию, добро пожаловать в чат!");
+        user = server.getUserService().createNewUser(login, password);
+        sendMessage("/authok " + getLogin());
+        sendMessage("СЕРВЕР: " + getLogin() + ", вы успешно прошли регистрацию, добро пожаловать в чат!");
         server.subscribe(this);
         return true;
     }

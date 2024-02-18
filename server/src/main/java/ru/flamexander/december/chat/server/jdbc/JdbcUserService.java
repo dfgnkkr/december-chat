@@ -6,6 +6,7 @@ import ru.flamexander.december.chat.server.UserService;
 import java.sql.*;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Date;
 import java.util.List;
 
 /**
@@ -36,14 +37,14 @@ public class JdbcUserService implements UserService {
     }
 
     @Override
-    public User createNewUser(String login, String password, String username) throws SQLException {
-        User newUser = new User(login, password, username);
-        JdbcService.getStatement().executeUpdate(String.format("insert into users (login, password, username, role) values ('%s', '%s', '%s', '%s');", newUser.getLogin(), newUser.getPassword(), newUser.getUsername(), "user"));
+    public User createNewUser(String login, String password) throws SQLException {
+        User newUser = new User(login, password);
+        JdbcService.getStatement().executeUpdate(String.format("insert into users (login, password, role) values ('%s', '%s', '%s');", newUser.getLogin(), newUser.getPassword(), "user"));
         return newUser;
     }
 
     @Override
-    public boolean isLoginAlreadyExist(String login) throws SQLException {
+    public boolean isLoginExist(String login) throws SQLException {
         for (User u : selectOperationFindAllUsers()) {
             if (u.getLogin().equals(login)) {
                 return true;
@@ -53,13 +54,23 @@ public class JdbcUserService implements UserService {
     }
 
     @Override
-    public boolean isUsernameAlreadyExist(String username) throws SQLException {
-        for (User u : selectOperationFindAllUsers()) {
-            if (u.getUsername().equals(username)) {
-                return true;
-            }
-        }
-        return false;
+    public void updateUnbanTime(String login, Date date) throws SQLException {
+        JdbcService.getStatement().executeUpdate(String.format("update users " +
+                "set unban_time = '" + new Timestamp(date.getTime()) + "' " +
+                "where login = '" + login + "'"));
+    }
+
+    @Override
+    public void updateRole(String login, String role) throws SQLException {
+        JdbcService.getStatement().executeUpdate(String.format("update users " +
+                "set role = '" + role + "' " +
+                "where login = '" + login + "'"));
+    }
+
+    @Override
+    public void deleteUser(String login) throws SQLException {
+        JdbcService.getStatement().executeUpdate(String.format("delete users " +
+                "where login = '" + login + "'"));
     }
 
     /**
@@ -72,9 +83,10 @@ public class JdbcUserService implements UserService {
     private static void fillTableByStatement(int count) throws SQLException {
         long time = System.currentTimeMillis();
         JdbcService.getConnection().setAutoCommit(false);
-        JdbcService.getStatement().executeUpdate(String.format("insert into users (login, password, username, role) values ('admin', 'password', 'developer', 'admin');"));
+        JdbcService.getStatement().executeUpdate(String.format("insert into users (login, password, role) values ('admin', 'password', 'admin');"));
+        JdbcService.getStatement().executeUpdate(String.format("insert into users (login, password, role) values ('moderator', 'password', 'moderator');"));
         for (int i = 1; i <= count; i++) {
-            JdbcService.getStatement().executeUpdate(String.format("insert into users (login, password, username, role) values ('%s', '%s', '%s', '%s');", "login" + i, "pass" + i, "user" + i, "user"));
+            JdbcService.getStatement().executeUpdate(String.format("insert into users (login, password, role) values ('%s', '%s', '%s');", "login" + i, "pass" + i, "user"));
         }
         JdbcService.getConnection().setAutoCommit(true);
         System.out.printf("Время выполнения: %d мс.\n", System.currentTimeMillis() - time);
@@ -92,8 +104,8 @@ public class JdbcUserService implements UserService {
                         "    id          integer primary key autoincrement," +
                         "    login       varchar(255)," +
                         "    password    varchar(255)," +
-                        "    username    varchar(255)," +
-                        "    role        varchar(255)" +
+                        "    role        varchar(255)," +
+                        "    unban_time  timestamp" +
                         ")");
     }
 
@@ -109,7 +121,7 @@ public class JdbcUserService implements UserService {
     /**
      * Получение списка студентов
      * <p>
-     * <B>Следует обратить внимание:</B> В примере видно что в случае JDBC индексация столбцов начинается с 1, и существует возможность
+     * <B>Следует обратить внимание:</B> В примере видно, что в случае JDBC индексация столбцов начинается с 1, и существует возможность
      * обращаться к столбцам по имени
      *
      * @return неизменяемый список студентов
@@ -119,7 +131,7 @@ public class JdbcUserService implements UserService {
         try (ResultSet rs = JdbcService.getStatement().executeQuery("select * from users;")) {
             List<User> out = new ArrayList<>();
             while (rs.next()) {
-                out.add(new User(rs.getString("login"), rs.getString("password"), rs.getString("username"), rs.getString("role")));
+                out.add(new User(rs.getString("login"), rs.getString("password"), rs.getString("role"), rs.getTimestamp("unban_time")));
             }
             return Collections.unmodifiableList(out);
         }
